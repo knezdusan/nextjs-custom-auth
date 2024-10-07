@@ -1,10 +1,11 @@
 "use server"
 
-import { signupFormSchema, loginFormSchema, type UserDb, type ClientDb } from "@/lib/def";
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
+import { signupFormSchema, UserDb, ClientDb, loginFormSchema } from "@/lib/def";
+import { hashSync, compareSync } from "bcrypt-ts";
+import * as CompanyEmailValidator from 'company-email-validator';
+import { error } from "console";
+// import { createAuthSession } from "./session";
 
-import { createDbClient } from '@/lib/supabase/server'
 
 export async function signup(prevState: unknown, formData: FormData) {
 
@@ -12,9 +13,9 @@ export async function signup(prevState: unknown, formData: FormData) {
 
   // validate credentials
   const validationResult = signupFormSchema.safeParse({
-    company: formData.get("company"),
     name: formData.get("name"),
     email: formData.get("email"),
+    company: formData.get("company"),
     password: formData.get("password"),
   });
 
@@ -26,17 +27,17 @@ export async function signup(prevState: unknown, formData: FormData) {
     }
   }
 
-  const { company, name, email, password } = validationResult.data;
+  const { name, email, company, password } = validationResult.data;
 
-  // validate the website url - if anything appart of the hostname is submitted it will be invalid
-  const url = new URL(website);
-  if ('https://' + url.hostname !== website) {
-    return {
-      errors: {
-        website: ["Company website url must be in the format https://example.com. Any other section of the website can be configured later."],
-      },
-    };
+  // extract hostname from email
+  const hostname = email.split("@")[1];
+
+  return {
+    errors: {
+      company: ["exit."],
+    }
   }
+
 
   // check if client already exists
   const clientExists = await prisma.client.findUnique({ where: { website } });
@@ -44,19 +45,6 @@ export async function signup(prevState: unknown, formData: FormData) {
     return {
       errors: {
         website: ["Client already exists, try to login instead, or contact your staff admin who can add your account"],
-      },
-    };
-  }
-
-  // validate if email belongs to the company
-  if (email.split('@')[1] !== url.hostname) {
-
-    // slugify the user name
-    const nameSlug = slugify(name);
-
-    return {
-      errors: {
-        email: [`Email must belong to the Company, eg: ${nameSlug}@${url.hostname}`],
       },
     };
   }

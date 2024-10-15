@@ -1,22 +1,29 @@
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { UserIcon, ChevronRight } from "lucide-react";
 import FormSignIn from "./FormSignIn";
-import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
-type NavbarAuthSignInProps = {
+type DialogNavbarAuthSignInProps = {
   isSignInDialogOpen: boolean;
   setIsSignInDialogOpen: (value: boolean) => void;
   openSignUpDialog: () => void;
   openAuthRecoveryDialog: () => void;
 };
 
-export default function NavbarAuthSignup({
+export default function DialogNavbarAuthSignIn({
   isSignInDialogOpen,
   setIsSignInDialogOpen,
   openSignUpDialog,
   openAuthRecoveryDialog,
-}: NavbarAuthSignInProps) {
+}: DialogNavbarAuthSignInProps) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setIsSignInDialogOpen(false);
+  }, [pathname, setIsSignInDialogOpen]);
+
   return (
     <Dialog open={isSignInDialogOpen} onOpenChange={setIsSignInDialogOpen}>
       <DialogTrigger asChild>

@@ -1,20 +1,22 @@
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ChevronRight, UserPlusIcon } from "lucide-react";
 import FormSignUp from "./FormSignUp";
 import Link from "next/link";
 
-type NavbarAuthSignUpProps = {
+type DialogNavbarAuthSignupProps = {
   isSignUpDialogOpen: boolean;
   setIsSignUpDialogOpen: (open: boolean) => void;
   openSignInDialog: () => void;
+  openAuthVerifyDialog: () => void;
 };
 
-export default function NavbarAuthSignup({
+export default function DialogNavbarAuthSignup({
   isSignUpDialogOpen,
   setIsSignUpDialogOpen,
   openSignInDialog,
-}: NavbarAuthSignUpProps) {
+  openAuthVerifyDialog,
+}: DialogNavbarAuthSignupProps) {
   return (
     <Dialog open={isSignUpDialogOpen} onOpenChange={setIsSignUpDialogOpen}>
       <DialogTrigger asChild>
@@ -27,8 +29,8 @@ export default function NavbarAuthSignup({
         <DialogHeader>
           <DialogTitle>Client Sign Up</DialogTitle>
         </DialogHeader>
-        <FormSignUp />
 
+        <FormSignUp openAuthVerifyDialog={openAuthVerifyDialog} />
         <section className="text-center text-xs text-muted-foreground">
           <div className="text-xs text-muted-foreground text-center">
             Already have an account?

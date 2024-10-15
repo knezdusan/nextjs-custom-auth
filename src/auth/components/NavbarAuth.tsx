@@ -1,48 +1,66 @@
 "use client";
 
-import NavbarAuthSignUp from "./NavbarAuthSignUp";
-import NavbarAuthSignIn from "./NavbarAuthSignIn";
+import DialogNavbarAuthSignUp from "./DialogNavbarAuthSignUp";
+import DialogNavbarAuthSignIn from "./DialogNavbarAuthSignIn";
+import DialogNavbarAuthVerify from "./DialogNavbarAuthVerify";
+import DialogNavbarAuthRecovery from "./DialogNavbarAuthRecovery";
+
 import { useState } from "react";
-import NavbarAuthRecovery from "./NavbarAuthRicovery";
 
 export default function NavbarAuth() {
   const [isSignUpDialogOpen, setIsSignUpDialogOpen] = useState(false);
   const [isSignInDialogOpen, setIsSignInDialogOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [isAuthVerifyDialogOpen, setIsAuthVerifyDialogOpen] = useState(false);
 
   const openSignInDialog = () => {
+    setIsSignInDialogOpen(true);
     setIsSignUpDialogOpen(false);
     setIsAuthDialogOpen(false);
-    setIsSignInDialogOpen(true);
+    setIsAuthVerifyDialogOpen(false);
   };
   const openSignUpDialog = () => {
+    setIsSignUpDialogOpen(true);
     setIsSignInDialogOpen(false);
     setIsAuthDialogOpen(false);
-    setIsSignUpDialogOpen(true);
+    setIsAuthVerifyDialogOpen(false);
   };
 
   const openAuthRecoveryDialog = () => {
+    setIsAuthDialogOpen(true);
     setIsSignInDialogOpen(false);
     setIsSignUpDialogOpen(false);
-    setIsAuthDialogOpen(true);
+    setIsAuthVerifyDialogOpen(false);
+  };
+
+  const openAuthVerifyDialog = () => {
+    setIsAuthVerifyDialogOpen(true);
+    setIsAuthDialogOpen(false);
+    setIsSignInDialogOpen(false);
+    setIsSignUpDialogOpen(false);
   };
 
   return (
     <div className="flex gap-6">
-      <NavbarAuthSignIn
+      <DialogNavbarAuthSignIn
         isSignInDialogOpen={isSignInDialogOpen}
         setIsSignInDialogOpen={setIsSignInDialogOpen}
         openSignUpDialog={openSignUpDialog}
         openAuthRecoveryDialog={openAuthRecoveryDialog}
       />
-      <NavbarAuthSignUp
+      <DialogNavbarAuthSignUp
         isSignUpDialogOpen={isSignUpDialogOpen}
         setIsSignUpDialogOpen={setIsSignUpDialogOpen}
         openSignInDialog={openSignInDialog}
+        openAuthVerifyDialog={openAuthVerifyDialog}
       />
-      <NavbarAuthRecovery
+      <DialogNavbarAuthRecovery
         isAuthRecoveryDialogOpen={isAuthDialogOpen}
         setIsAuthRecoveryDialogOpen={setIsAuthDialogOpen}
+      />
+      <DialogNavbarAuthVerify
+        isAuthVerifyDialogOpen={isAuthVerifyDialogOpen}
+        setIsAuthVerifyDialogOpen={setIsAuthVerifyDialogOpen}
       />
     </div>
   );

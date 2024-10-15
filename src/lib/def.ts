@@ -4,8 +4,8 @@ import * as CompanyEmailValidator from 'company-email-validator';
 // Database Schema and Types ------------------------
 
 export const clientSchema = z.object({
-  company: z.string().trim().min(3, 'Company name must be at least 3 characters long').max(50, 'Company name must be at most 50 characters long'),
-  // status: z.enum(["ACTIVE", "INACTIVE", "TRIAL"]).default("TRIAL"),
+  company: z.string().trim().min(2, 'Company name must be at least 2 characters long').max(50, 'Company name must be at most 50 characters long'),
+  // status: z.enum(["ACTIVE", "INACTIVE", "TRIAL"]).default("INACTIVE"),
 });
 
 export const clientSchemaDb = clientSchema.extend({
@@ -14,10 +14,9 @@ export const clientSchemaDb = clientSchema.extend({
 
 export const userSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 1 characters long').max(30, 'Name must be at most 30 characters long'),
-  email: z.string().trim().min(1, 'Email is required').toLowerCase()
+  email: z.string().trim().min(1, 'Email is required')
     .email('Invalid email address. ')
     .refine((email) => {
-      const host = email.split('@')[1];
       return CompanyEmailValidator.isCompanyEmail(email);
     }, {
       message: "You must provide your email that you use for your Company account. "
@@ -43,23 +42,18 @@ export const signupFormSchema = userSchema.merge(clientSchema);
 // make loginFormSchema which picks only email and password from userSchema
 export const loginFormSchema = userSchema.pick({ "email": true, "password": true });
 
-export type Client = z.infer<typeof clientSchema>;
-export type ClientDb = z.infer<typeof clientSchemaDb>;
-export type User = z.infer<typeof userSchema>;
-export type UserDb = z.infer<typeof userSchemaDb>;
-export type SignupForm = z.infer<typeof signupFormSchema>;
-export type LoginForm = z.infer<typeof loginFormSchema>;
+// make authRecoveryFormSchema which picks only email from userSchema
+export const authRecoveryFormSchema = userSchema.pick({ "email": true });
 
-export type AuthFormErrors = {
-  errors: {
-    email?: string[];
-    password?: string[];
-    name?: string[];
-    company?: string[];
-  }
-}
+// make passwordResetFormSchema which picks only password from userSchema
+export const passwordResetFormSchema = userSchema.pick({ "password": true });
 
-export type JWTPayload = Omit<SignupForm, "password">
+export type TClient = z.infer<typeof clientSchema> & { hostname: string, status: string };
+export type TUser = z.infer<typeof userSchema> & { role: string, clientId: string };
+export type TSignupForm = z.infer<typeof signupFormSchema>;
+export type TLoginForm = z.infer<typeof loginFormSchema>;
+export type TAuth = Omit<TUser, "password"> & TClient;
+export type TAuthSession = TAuth | null;
 
 
 // Email / nodemailer types -------------------------------------------------

@@ -1,15 +1,17 @@
 "use server"
 
-import { signupFormSchema, UserDb, ClientDb, loginFormSchema } from "@/lib/def";
+import { signupFormSchema, loginFormSchema, EmailData, TAuth, authRecoveryFormSchema, passwordResetFormSchema } from "@/lib/def";
 import { hashSync, compareSync } from "bcrypt-ts";
-import * as CompanyEmailValidator from 'company-email-validator';
-import { error } from "console";
-// import { createAuthSession } from "./session";
+import { createClient } from '@/supabase/server';
+import { sendEmail } from "@/actions/mailer";
+import { encryptDataString } from "@/lib/hash";
+import { createAuthSession, deleteAuthSession } from "./session";
+import { redirect } from "next/navigation";
 
+
+// signup() -> Signup form server action ------------------------------------------------------------>
 
 export async function signup(prevState: unknown, formData: FormData) {
-
-  let user = prevState as UserDb;
 
   // validate credentials
   const validationResult = signupFormSchema.safeParse({
@@ -18,7 +20,6 @@ export async function signup(prevState: unknown, formData: FormData) {
     company: formData.get("company"),
     password: formData.get("password"),
   });
-
 
   if (!validationResult.success) {
     console.log("there are errors: ", validationResult.error);
@@ -32,26 +33,50 @@ export async function signup(prevState: unknown, formData: FormData) {
   // extract hostname from email
   const hostname = email.split("@")[1];
 
-  return {
-    errors: {
-      company: ["exit."],
-    }
-  }
-
+  // DB operations
+  const supabase = createClient();
 
   // check if client already exists
-  const clientExists = await prisma.client.findUnique({ where: { website } });
-  if (clientExists) {
+  const { data: clients, error: clientsError } = await supabase
+    .from('clients')
+    .select("id")
+    // Filters
+    .eq('hostname', hostname)
+
+  if (clientsError) {
+    console.log('Error while checking if client exists: ', clientsError);
     return {
       errors: {
-        website: ["Client already exists, try to login instead, or contact your staff admin who can add your account"],
+        password: ["Error processing request, please try again later"],
+      },
+    };
+  }
+
+  if (clients && clients.length > 0) {
+    return {
+      errors: {
+        password: ["Client already exists, try to login instead, or contact your staff admin who can add your account"],
       },
     };
   }
 
   // check if user already exists
-  const userExists = await prisma.user.findUnique({ where: { email } });
-  if (userExists) {
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select("id")
+    // Filters
+    .eq('email', email)
+
+  if (usersError) {
+    console.log('Error while checking if user exists: ', usersError);
+    return {
+      errors: {
+        password: ["Error processing request, please try again later"],
+      },
+    };
+  }
+
+  if (users && users.length > 0) {
     return {
       errors: {
         email: ["User already exists, try to login instead"],
@@ -59,72 +84,107 @@ export async function signup(prevState: unknown, formData: FormData) {
     };
   }
 
-  //
-
-
   // Save client data to database
-  let client: ClientDb | undefined;
+  let clientId = "";
   try {
-    client = await prisma.client.create({
-      data: {
-        company,
-        website,
-      },
-    });
-  } catch (error) {
-    if (error instanceof Error) {
+    const { data, error } = await supabase
+      .from('clients')
+      .insert([
+        { name: company, hostname: hostname },
+      ])
+      .select('id');
+
+    if (error || !data) {
+      throw new Error(error?.message); // This throws an error that can be caught below
+    }
+
+    clientId = data[0].id;
+  } catch (err) {
+    if (err instanceof Error) {
       return {
         errors: {
-          company: [error.message],
+          password: ["Client creation failed, please try again later"],
         },
       }
     }
   }
-  finally {
-    await prisma.$disconnect();
-  }
 
-  if (!client) return {
-    errors: {
-      company: ["Client creation failed, please try again later"],
-    },
+  if (!clientId || clientId === "") {
+    return {
+      errors: {
+        password: ["Client creation failed, please try again later"],
+      },
+    }
   }
 
   // Save user data to database
   const hashedUserPassword = hashSync(password as string, 10);
 
   try {
-    user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedUserPassword,
-        clientId: client.id,
-      },
-    });
-  } catch (error) {
-    if (error instanceof Error) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert([
+        { name: name, email: email, password: hashedUserPassword, client_id: clientId },
+      ])
+      .select('id');
+
+    if (error || !data) {
+      throw new Error(error?.message); // This throws an error that can be caught below
+    }
+
+    // const userId = data[0].id;
+  } catch (err) {
+    if (err instanceof Error) {
       return {
         errors: {
-          password: [error.message],
+          password: ["User creation failed, please try again later"],
         },
       }
     }
   }
-  finally {
-    await prisma.$disconnect();
+
+  // encrypt/hash the email
+  const authEmailHash = encryptDataString(email);
+
+  // Extract the first name from the user name
+  const firstName = name.split(" ")[0];
+
+  // Send email to the client/user with login link
+  const emailData: EmailData = {
+    to: email,
+    subject: 'Welcome to EntryFrame! Please Verify Your Email Address',
+    text: `To finish signing up, you can copy and paste the following URL into your browser:\n\n${process.env.NEXT_PUBLIC_BASE_URL}/auth/signup-confirmation?hash=${authEmailHash}`,
+    html: `<h2>Hello ${firstName},</h2><p>Welcome to EntryFrame! 🎉 We're excited to have you on board.<br />To complete your registration, please verify your email address by clicking the link below:</p><a href="${process.env.NEXT_PUBLIC_BASE_URL}/auth/signup-confirmation?hash=${authEmailHash}">Verify My Email</a><br /><h3>Important:</h3><p>If you didn’t sign up for an EntryFrame account, please ignore this email.</p><p>Thank you,<br />The EntryFrame Team</p>`,
+  };
+
+  try {
+    const response = await sendEmail(emailData);
+    if (!response.success) {
+      return {
+        errors: {
+          password: ["Confirmation email sanding error. Please try to signup again latter."],
+        },
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send email:", error);
+    return {
+      errors: {
+        password: ["Confirmation email sanding error. Please try to signup again latter."],
+      },
+    }
   }
 
-  // create session
-  await createAuthSession({
-    company,
-    website,
-    email: email,
-    name: name,
-    role: user.role,
-    status: client.status,
-  })
+  // If error "Success" will be returned the form is valid and the verification modal will be shown
+  return {
+    errors: {
+      password: ["Success"],
+    },
+  }
 }
+
+
+// login() -> SignInform server action  ------------------------------------------------------------>
 
 export async function login(prevState: unknown, formData: FormData) {
 
@@ -133,7 +193,6 @@ export async function login(prevState: unknown, formData: FormData) {
     email: formData.get("email"),
     password: formData.get("password"),
   });
-
 
   if (!validationResult.success) {
     console.log("there are errors: ", validationResult.error);
@@ -144,21 +203,64 @@ export async function login(prevState: unknown, formData: FormData) {
 
   const { email, password } = validationResult.data;
 
+  // DB operations
+  const supabase = createClient();
+
 
   // check if user with the given email and hashed password already exists
-  const user = await prisma.user.findUnique({ where: { email } });
+  // check if user already exists
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select("*")
+    // Filters
+    .eq('email', email)
 
-  if (!user || !compareSync(password, user.password)) {
+  if (usersError) {
+    console.log('Error while checking if user exists: ', usersError);
     return {
       errors: {
-        password: ["Invalid email or password"],
+        password: ["Error processing request, please try again later"],
       },
     };
   }
 
-  // Get client
-  const client = await prisma.client.findUnique({ where: { id: user.clientId } });
-  if (!client) {
+  if (!users || users.length === 0) {
+    return {
+      errors: {
+        email: ["Check your email and try again"],
+      },
+    };
+  }
+
+  if (!compareSync(password, users[0].password)) {
+    return {
+      errors: {
+        password: ["Invalid password, please try again"],
+      },
+    };
+  }
+
+  const { name, role, client_id: clientId } = users[0];
+
+  console.log("client id: ", clientId);
+
+  // Get client data
+  const { data: clients, error: clientsError } = await supabase
+    .from('clients')
+    .select("*")
+    // Filters
+    .eq('id', clientId)
+
+  if (clientsError) {
+    console.log('Error while checking if client exists: ', clientsError);
+    return {
+      errors: {
+        password: ["Error processing request, please try again later"],
+      },
+    };
+  }
+
+  if (!clients || clients.length === 0) {
     return {
       errors: {
         password: ["User credentials do not match any client, please contact us for support"],
@@ -166,13 +268,192 @@ export async function login(prevState: unknown, formData: FormData) {
     };
   }
 
+  const { name: company, hostname, status } = clients[0];
+
   // create session
-  await createAuthSession({
-    company: client.company,
-    website: client.website,
-    email: email,
-    name: user.name,
-    role: user.role,
-    status: client.status,
-  })
+  try {
+    await createAuthSession({
+      name,
+      email,
+      role,
+      clientId,
+      company,
+      hostname,
+      status,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Error creating auth session:', error.message);
+    } else {
+      console.error('Unknown error creating auth session:', error);
+    }
+    // You may also want to handle the error further, e.g., by returning an error response
+    return {
+      errors: {
+        password: ["Login error, please try again later"],
+      },
+    };
+  }
+
+  // Redirect user to dashboard page
+  redirect("/dashboard");
+
+  return;
+
+}
+
+
+// recovery() -> Password RecoverForm server action  ------------------------------------------------------------->
+
+export async function recovery(prevState: unknown, formData: FormData) {
+
+  console.log("recovery: ", formData.get("email"));
+
+  // validate email
+  const validationResult = authRecoveryFormSchema.safeParse({
+    email: formData.get("email"),
+  });
+
+  if (!validationResult.success) {
+    console.log("there are errors: ", validationResult.error);
+    return {
+      errors: validationResult.error.flatten().fieldErrors,
+    }
+  }
+
+  const { email } = validationResult.data;
+
+  // DB operations
+  const supabase = createClient();
+
+  // check if user with given email already exists in our database
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select("*")
+    // Filters
+    .eq('email', email)
+
+  if (usersError) {
+    console.log('Error while checking if user exists: ', usersError);
+    return {
+      errors: {
+        password: ["Error processing request, please try again later"],
+      },
+    };
+  }
+
+  if (!users || users.length === 0) {
+    return {
+      errors: {
+        email: ["There is no user with this email"],
+      },
+    };
+  }
+
+  // encrypt/hash the email
+  const authEmailHash = encryptDataString(email);
+
+  // Extract the first name from the user name
+  const firstName = users[0].name.split(" ")[0];
+
+  // Send email to the client/user with login link
+  const emailData: EmailData = {
+    to: email,
+    subject: 'EntryFrame Password Reset',
+    text: `Hi ${firstName},\n\nPlease copy paste the following link into your browser to reset your password: ${process.env.NEXT_PUBLIC_BASE_URL}/auth/password-recovery?hash=${authEmailHash}\n\n\nThank you,\nThe EntryFrame Team`,
+    html: `<h2>Hello ${firstName},</h2><p>Please click on the link below to reset your password:<br /><a href="${process.env.NEXT_PUBLIC_BASE_URL}/auth/password-recovery?hash=${authEmailHash}">Reset Password</a></p><h3>Important:</h3><p>If you didn’t sign up for an EntryFrame account, please ignore this email.</p><p>Thank you,<br />The EntryFrame Team</p>`,
+  };
+
+  try {
+    const response = await sendEmail(emailData);
+    if (!response.success) {
+      return {
+        errors: {
+          password: ["Password reset email sanding error. Please try to signup again latter."],
+        },
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send email:", error);
+    return {
+      errors: {
+        password: ["Password reset email sanding error. Please try to signup again latter."],
+      },
+    }
+  }
+
+  // If error "Success" will be returned the form is valid and the password reset modal will be shown
+  return {
+    errors: {
+      password: ["Success"],
+    },
+  }
+}
+
+// reset() -> Password ResetForm server action  ------------------------------------------------------------->
+
+export async function reset(prevState: unknown, formData: FormData) {
+
+  // Extract email from prevState
+  const email = (prevState as { errors: { password: string[] } }).errors.password[0];
+
+  // validate credentials
+  const validationResult = passwordResetFormSchema.safeParse({
+    password: formData.get("password1"),
+  });
+
+  if (!validationResult.success) {
+    console.log("there are errors: ", validationResult.error);
+    return {
+      errors: validationResult.error.flatten().fieldErrors,
+    }
+  }
+
+  const { password } = validationResult.data;
+
+  // Check if password1 and password2 are the same
+  if (password !== formData.get("password2")) {
+    return {
+      errors: {
+        password: ["Passwords do not match, please try again"],
+      },
+    };
+  }
+
+  const hashedUserPassword = hashSync(password as string, 10);
+
+  // DB operations
+  const supabase = createClient();
+
+  // Update user password
+  try {
+    await supabase
+      .from('users')
+      .update({ password: hashedUserPassword })
+      .eq('email', email)
+  } catch (error) {
+    console.log('Error while updating user password: ', error);
+    return {
+      errors: {
+        password: ["Error processing request, please try again later"],
+      },
+    };
+  }
+
+  // Redirect user to login page
+  redirect("/auth/recovery-sign-in");
+
+  return;
+}
+
+
+export async function createAuthSessionAction(payload: TAuth) {
+  return await createAuthSession(payload);
+}
+
+export async function deleteAuthSessionAction() {
+  console.log("deleteAuthSessionAction called");
+  if (await deleteAuthSession()) {
+    redirect("/");
+  }
 }

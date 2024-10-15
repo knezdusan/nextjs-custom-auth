@@ -1,14 +1,31 @@
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { HelpCircle } from "lucide-react";
 import { useFormState } from "react-dom";
 import { signup } from "../actions";
+import ButtonSubmit from "@/components/custom/ButtonSubmit";
 
-export default function FormSignUp() {
+type FormSignUpProps = {
+  openAuthVerifyDialog: () => void;
+};
+
+export default function FormSignUp({ openAuthVerifyDialog }: FormSignUpProps) {
   const [state, action] = useFormState(signup, null);
 
-  return (
+  const signUpSuccess =
+    state &&
+    typeof state === "object" &&
+    state.errors &&
+    "password" in state.errors &&
+    state?.errors?.password?.includes("Success");
+
+  if (signUpSuccess) {
+    openAuthVerifyDialog();
+  }
+
+  return signUpSuccess ? (
+    <p className="text-green-500 text-sm relative bottom-1 left-3">Signup successful</p>
+  ) : (
     <form className="grid gap-4 py-4" action={action}>
       <div className="flex items-center">
         <Input
@@ -57,7 +74,7 @@ export default function FormSignUp() {
           placeholder="Your Company name"
           className="flex-grow"
           required
-          minLength={3}
+          minLength={2}
           maxLength={50}
         />
         <TooltipProvider>
@@ -103,9 +120,7 @@ export default function FormSignUp() {
         <p className="text-red-500 text-sm relative bottom-1 left-3">{state.errors.password}</p>
       )}
       <div className="text-center relative top-3">
-        <Button type="submit" className="min-w-56">
-          Create Account
-        </Button>
+        <ButtonSubmit>Create account</ButtonSubmit>
       </div>
     </form>
   );

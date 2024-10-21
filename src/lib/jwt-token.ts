@@ -3,7 +3,7 @@ import { jwtVerify, SignJWT } from 'jose';
 
 const secret = new TextEncoder().encode(process.env.SECRET_KEY!);
 
-export async function createJwtToken(payload: Record<string, any>, expiresAt = process.env.JWT_EXPIRES_IN) {
+export async function createJwtToken<T>(payload: T, expiresAt = process.env.JWT_EXPIRES_IN!) {
   return new SignJWT({ payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -16,6 +16,7 @@ export async function verifyJwtToken(token: string) {
     const { payload } = await jwtVerify(token, secret);
     return payload;
   } catch (error) {
+    console.error(error);
     return null;
   }
 }

@@ -2,11 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
-import { deleteAuthSessionAction } from "../actions";
+import { deleteAuthSession } from "../session";
 
-export default function DeleteAuthSession() {
+export default function NavbarAuthSignOut() {
   const handleLogout = async () => {
-    await deleteAuthSessionAction(); // Call the server action
+    await deleteAuthSession(); // Call the server action
   };
 
   return (

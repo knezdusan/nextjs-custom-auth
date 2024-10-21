@@ -1,12 +1,12 @@
-'use server'
+import 'server-only';
 
 import nodemailer from 'nodemailer';
-import { EmailData } from '../lib/def';
+import { EmailData } from './def';
 
 export async function sendEmail({ to, subject, text, html }: EmailData) {
 
   // Create a transporter using Gmail SMTP
-  let transporter = nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
     secure: false, // Use TLS
@@ -20,7 +20,7 @@ export async function sendEmail({ to, subject, text, html }: EmailData) {
 
   try {
     // Send email
-    let info = await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"Dumavena Corp" <${process.env.EMAIL_USER}>`,
       to: to,
       subject: subject,

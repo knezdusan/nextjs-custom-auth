@@ -1,5 +1,3 @@
-"use server";
-
 import DialogAuthResetPassword from "@/auth/components/DialogAuthResetPassword";
 import { decryptDataString } from "@/lib/hash";
 import { createClient } from "@/supabase/server";
@@ -21,7 +19,7 @@ export default async function PasswordRecovery({ searchParams }: { searchParams:
 
   const secretKey = process.env.SECRET_KEY;
   const decryptedHash = decryptDataString(hash, secretKey);
-  const [email, token] = decryptedHash.split(":");
+  const [email] = decryptedHash.split(":");
 
   // Check if email is valid
   if (!email) {
@@ -29,9 +27,9 @@ export default async function PasswordRecovery({ searchParams }: { searchParams:
   }
 
   // Check if the user with this email exist in database
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
-  const { data: users, error: usersError } = await supabase
+  const { data: users, error: usersError } = await supabaseClient
     .from("users")
     .select()
     // Filters

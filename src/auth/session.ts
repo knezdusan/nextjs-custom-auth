@@ -1,4 +1,4 @@
-import 'server-only';
+'use server';
 
 import { cookies } from 'next/headers';
 import { type TAuth } from '@/lib/def';
@@ -36,12 +36,10 @@ export async function createAuthSession(payload: TAuth) {
 export async function verifyAuthSession() {
   const authSessionCookieToken = cookies().get(authSessionCookie.name)?.value;
   if (!authSessionCookieToken) {
-    console.error('No auth session cookie found');
     return null;
   }
   const authSessionPayload = await verifyJwtToken(authSessionCookieToken);
   if (!authSessionPayload) {
-    console.error('Invalid auth session token');
     return null;
   };
 

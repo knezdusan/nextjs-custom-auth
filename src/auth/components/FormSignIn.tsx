@@ -1,10 +1,10 @@
 import { Input } from "@/components/ui/input";
 import { useFormState } from "react-dom";
-import { login } from "../actions";
+import { signin } from "../actions";
 import ButtonSubmit from "@/components/custom/ButtonSubmit";
 
 export default function FormSignIn() {
-  const [state, action] = useFormState(login, null);
+  const [state, action] = useFormState(signin, null);
 
   return (
     <form className="grid gap-4 py-4" action={action}>
@@ -27,7 +27,7 @@ export default function FormSignIn() {
         />
       </div>
       {state && typeof state === "object" && state.errors && "password" in state.errors && (
-        <p className="text-red-500 text-sm relative bottom-1 left-3">{state.errors.password}</p>
+        <p className="text-red-500 text-sm relative bottom-1 left-3 pl-3">{state.errors.password}</p>
       )}
       <div className="text-center relative top-3">
         <ButtonSubmit>Sign in</ButtonSubmit>

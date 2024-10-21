@@ -1,6 +1,4 @@
-"use server";
-
-import FormSignupVerified from "@/auth/components/FormSignUpVerified";
+import SignupVerified from "@/auth/components/SignUpVerified";
 import { TAuth } from "@/lib/def";
 import { decryptDataString } from "@/lib/hash";
 import { createClient } from "@/supabase/server";
@@ -20,7 +18,7 @@ export default async function SignUpConfirmation({ searchParams }: { searchParam
   const hash = searchParams.hash;
   const secretKey = process.env.SECRET_KEY;
   const decryptedHash = decryptDataString(hash, secretKey);
-  const [email, token] = decryptedHash.split(":");
+  const [email] = decryptedHash.split(":");
 
   // Check if email id valid
   if (!email) {
@@ -28,9 +26,9 @@ export default async function SignUpConfirmation({ searchParams }: { searchParam
   }
 
   // Check if the user with this email exist in database
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
-  const { data: users, error: usersError } = await supabase
+  const { data: users, error: usersError } = await supabaseClient
     .from("users")
     .select()
     // Filters
@@ -59,7 +57,7 @@ export default async function SignUpConfirmation({ searchParams }: { searchParam
     }
 
     // Update client status to TRIAL
-    const { error: clientUpdateError } = await supabase
+    const { error: clientUpdateError } = await supabaseClient
       .from("clients")
       .update({ status: "TRIAL" })
       .eq("id", users[0].client_id);
@@ -71,7 +69,7 @@ export default async function SignUpConfirmation({ searchParams }: { searchParam
 
   // User signup verification successful, create auth session and login user
   // Get client data from database
-  const { data: clients, error: clientsError } = await supabase
+  const { data: clients, error: clientsError } = await supabaseClient
     .from("clients")
     .select()
     // Filters
@@ -98,5 +96,5 @@ export default async function SignUpConfirmation({ searchParams }: { searchParam
     status,
   };
 
-  return <FormSignupVerified authPayload={authPayload} />;
+  return <SignupVerified authPayload={authPayload} />;
 }

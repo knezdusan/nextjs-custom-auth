@@ -1,11 +1,11 @@
 "use server"
 
-import { signupFormSchema, loginFormSchema, EmailData, TAuth, authRecoveryFormSchema, passwordResetFormSchema } from "@/lib/def";
+import { signupFormSchema, loginFormSchema, EmailData, authRecoveryFormSchema, passwordResetFormSchema } from "@/lib/def";
 import { hashSync, compareSync } from "bcrypt-ts";
 import { createClient } from '@/supabase/server';
-import { sendEmail } from "@/actions/mailer";
+import { sendEmail } from "@/lib/mailer";
 import { encryptDataString } from "@/lib/hash";
-import { createAuthSession, deleteAuthSession } from "./session";
+import { createAuthSession } from "./session";
 import { redirect } from "next/navigation";
 
 
@@ -34,10 +34,10 @@ export async function signup(prevState: unknown, formData: FormData) {
   const hostname = email.split("@")[1];
 
   // DB operations
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
   // check if client already exists
-  const { data: clients, error: clientsError } = await supabase
+  const { data: clients, error: clientsError } = await supabaseClient
     .from('clients')
     .select("id")
     // Filters
@@ -61,7 +61,7 @@ export async function signup(prevState: unknown, formData: FormData) {
   }
 
   // check if user already exists
-  const { data: users, error: usersError } = await supabase
+  const { data: users, error: usersError } = await supabaseClient
     .from('users')
     .select("id")
     // Filters
@@ -87,7 +87,7 @@ export async function signup(prevState: unknown, formData: FormData) {
   // Save client data to database
   let clientId = "";
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('clients')
       .insert([
         { name: company, hostname: hostname },
@@ -121,7 +121,7 @@ export async function signup(prevState: unknown, formData: FormData) {
   const hashedUserPassword = hashSync(password as string, 10);
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('users')
       .insert([
         { name: name, email: email, password: hashedUserPassword, client_id: clientId },
@@ -184,9 +184,9 @@ export async function signup(prevState: unknown, formData: FormData) {
 }
 
 
-// login() -> SignInform server action  ------------------------------------------------------------>
+// signin() -> FormSignIn server action  ------------------------------------------------------------>
 
-export async function login(prevState: unknown, formData: FormData) {
+export async function signin(prevState: unknown, formData: FormData) {
 
   // validate credentials
   const validationResult = loginFormSchema.safeParse({
@@ -195,7 +195,7 @@ export async function login(prevState: unknown, formData: FormData) {
   });
 
   if (!validationResult.success) {
-    console.log("there are errors: ", validationResult.error);
+    console.log("User login errors: ", validationResult.error);
     return {
       errors: validationResult.error.flatten().fieldErrors,
     }
@@ -204,12 +204,12 @@ export async function login(prevState: unknown, formData: FormData) {
   const { email, password } = validationResult.data;
 
   // DB operations
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
 
   // check if user with the given email and hashed password already exists
   // check if user already exists
-  const { data: users, error: usersError } = await supabase
+  const { data: users, error: usersError } = await supabaseClient
     .from('users')
     .select("*")
     // Filters
@@ -242,10 +242,8 @@ export async function login(prevState: unknown, formData: FormData) {
 
   const { name, role, client_id: clientId } = users[0];
 
-  console.log("client id: ", clientId);
-
   // Get client data
-  const { data: clients, error: clientsError } = await supabase
+  const { data: clients, error: clientsError } = await supabaseClient
     .from('clients')
     .select("*")
     // Filters
@@ -269,6 +267,15 @@ export async function login(prevState: unknown, formData: FormData) {
   }
 
   const { name: company, hostname, status } = clients[0];
+
+  // Check if user is inactive
+  if (status === "INACTIVE") {
+    return {
+      errors: {
+        password: ["User is not active. If you received confirmation email from us, please check your inbox. Otherwise, please contact us for support."],
+      },
+    };
+  }
 
   // create session
   try {
@@ -306,16 +313,13 @@ export async function login(prevState: unknown, formData: FormData) {
 // recovery() -> Password RecoverForm server action  ------------------------------------------------------------->
 
 export async function recovery(prevState: unknown, formData: FormData) {
-
-  console.log("recovery: ", formData.get("email"));
-
   // validate email
   const validationResult = authRecoveryFormSchema.safeParse({
     email: formData.get("email"),
   });
 
   if (!validationResult.success) {
-    console.log("there are errors: ", validationResult.error);
+    console.log("Password recovery email validation errors: ", validationResult.error);
     return {
       errors: validationResult.error.flatten().fieldErrors,
     }
@@ -324,17 +328,17 @@ export async function recovery(prevState: unknown, formData: FormData) {
   const { email } = validationResult.data;
 
   // DB operations
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
   // check if user with given email already exists in our database
-  const { data: users, error: usersError } = await supabase
+  const { data: users, error: usersError } = await supabaseClient
     .from('users')
     .select("*")
     // Filters
     .eq('email', email)
 
   if (usersError) {
-    console.log('Error while checking if user exists: ', usersError);
+    console.log('Password recovery - Error while checking if user exists: ', usersError);
     return {
       errors: {
         password: ["Error processing request, please try again later"],
@@ -356,7 +360,7 @@ export async function recovery(prevState: unknown, formData: FormData) {
   // Extract the first name from the user name
   const firstName = users[0].name.split(" ")[0];
 
-  // Send email to the client/user with login link
+  // Send email to the client/user with password reset link
   const emailData: EmailData = {
     to: email,
     subject: 'EntryFrame Password Reset',
@@ -374,7 +378,7 @@ export async function recovery(prevState: unknown, formData: FormData) {
       }
     }
   } catch (error) {
-    console.error("Failed to send email:", error);
+    console.error("Password recovery - Failed to send email:", error);
     return {
       errors: {
         password: ["Password reset email sanding error. Please try to signup again latter."],
@@ -403,7 +407,7 @@ export async function reset(prevState: unknown, formData: FormData) {
   });
 
   if (!validationResult.success) {
-    console.log("there are errors: ", validationResult.error);
+    console.log("Password reset validation errors: ", validationResult.error);
     return {
       errors: validationResult.error.flatten().fieldErrors,
     }
@@ -423,11 +427,11 @@ export async function reset(prevState: unknown, formData: FormData) {
   const hashedUserPassword = hashSync(password as string, 10);
 
   // DB operations
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
   // Update user password
   try {
-    await supabase
+    await supabaseClient
       .from('users')
       .update({ password: hashedUserPassword })
       .eq('email', email)
@@ -440,20 +444,7 @@ export async function reset(prevState: unknown, formData: FormData) {
     };
   }
 
-  // Redirect user to login page
   redirect("/auth/recovery-sign-in");
 
   return;
-}
-
-
-export async function createAuthSessionAction(payload: TAuth) {
-  return await createAuthSession(payload);
-}
-
-export async function deleteAuthSessionAction() {
-  console.log("deleteAuthSessionAction called");
-  if (await deleteAuthSession()) {
-    redirect("/");
-  }
 }

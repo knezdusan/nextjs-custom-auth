@@ -1,7 +1,9 @@
 import { z } from "zod";
 import * as CompanyEmailValidator from 'company-email-validator';
 
-// Database Schema and Types ------------------------
+// Database Schema and Types ----------------------------------------------
+
+// DB Schemas ----------------------------------------------
 
 export const clientSchema = z.object({
   company: z.string().trim().min(2, 'Company name must be at least 2 characters long').max(50, 'Company name must be at most 50 characters long'),
@@ -47,6 +49,9 @@ export const authRecoveryFormSchema = userSchema.pick({ "email": true });
 
 // make passwordResetFormSchema which picks only password from userSchema
 export const passwordResetFormSchema = userSchema.pick({ "password": true });
+
+
+// DB Types --------------------------------------------------------------
 
 export type TClient = z.infer<typeof clientSchema> & { hostname: string, status: string };
 export type TUser = z.infer<typeof userSchema> & { role: string, clientId: string };
